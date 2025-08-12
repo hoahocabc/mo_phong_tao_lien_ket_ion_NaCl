@@ -2,8 +2,8 @@
 // Author: GPT-5
 
 let fontRegular; // Khai báo biến toàn cục để chứa phông chữ đã tải
-let playButton, resetButton;
-let titleDiv, footerDiv;
+let playButton, resetButton, instructionsButton;
+let titleDiv, footerDiv, instructionsPopup;
 let atoms = [];
 let state = "idle"; // idle, animating, transferring, rearranging, done
 let progress = 0; // The single progress variable for the atom movement (0 to 1)
@@ -30,6 +30,7 @@ let startPos, endPos, controlPoint1, controlPoint2;
 
 function preload() {
   // Tải một phông chữ đáng tin cậy từ Google Fonts CDN
+  // Bước này rất quan trọng để tránh lỗi trong chế độ WEBGL
   fontRegular = loadFont('https://fonts.gstatic.com/s/opensans/v27/mem8YaGs126MiZpBA-UFVZ0e.ttf');
 }
 
@@ -39,7 +40,8 @@ function setup() {
   perspective(PI / 3, width / height, 0.1, 4000); 
   
   smooth();
-  textFont(fontRegular); // Set the preloaded font object here
+  // Bây giờ chúng ta sử dụng đối tượng font đã được tải
+  textFont(fontRegular); 
   textAlign(CENTER, CENTER);
   noStroke();
   
@@ -123,28 +125,76 @@ function createUI() {
   resetButton.mouseOut(() => {
     resetButton.style("background", "linear-gradient(145deg, #36d1dc, #5b86e5)");
   });
+
+  instructionsButton = createButton("Hướng dẫn");
+  styleButton(instructionsButton, true);
+  instructionsButton.mousePressed(() => {
+      instructionsPopup.style('display', 'block');
+  });
+
+  // Create instructions popup
+  instructionsPopup = createDiv();
+  instructionsPopup.id('instructions-popup');
+  instructionsPopup.style('position', 'fixed');
+  instructionsPopup.style('top', '50%');
+  instructionsPopup.style('left', '50%');
+  instructionsPopup.style('transform', 'translate(-50%, -50%)');
+  instructionsPopup.style('background-color', 'rgba(0, 0, 0, 0.85)');
+  instructionsPopup.style('border-radius', '12px');
+  instructionsPopup.style('padding', '20px');
+  instructionsPopup.style('color', '#fff');
+  instructionsPopup.style('font-family', 'Arial');
+  instructionsPopup.style('z-index', '1000');
+  instructionsPopup.style('box-shadow', '0 4px 8px rgba(0, 0, 0, 0.2)');
+  instructionsPopup.style('display', 'none'); // Hidden by default
+
+  let popupContent = `
+    <h2 style="font-size: 24px; margin-bottom: 15px; text-align: center;">Hướng dẫn sử dụng</h2>
+    <ul style="list-style-type: none; padding: 0;">
+      <li style="margin-bottom: 10px;">• Nhấn nút "Play" để bắt đầu quá trình mô phỏng liên kết ion.</li>
+      <li style="margin-bottom: 10px;">• Sau khi mô phỏng hoàn tất, bạn có thể sử dụng chuột để xoay và xem mô hình từ các góc khác nhau.</li>
+      <li style="margin-bottom: 10px;">• Giữ phím **Ctrl** và kéo chuột trái để di chuyển toàn bộ mô hình trên màn hình.</li>
+      <li style="margin-bottom: 10px;">• Sử dụng con lăn chuột để phóng to hoặc thu nhỏ.</li>
+      <li style="margin-bottom: 10px;">• Nhấn nút "Reset" để quay lại trạng thái ban đầu.</li>
+    </ul>
+    <button id="closePopup" style="display: block; width: 100%; padding: 10px; margin-top: 20px; font-size: 16px; border: none; border-radius: 6px; background-color: #36d1dc; color: #fff; cursor: pointer;">Đóng</button>
+  `;
+  instructionsPopup.html(popupContent);
+
+  // Add click listener for the close button within the popup
+  document.getElementById('closePopup').addEventListener('click', () => {
+      instructionsPopup.style('display', 'none');
+  });
   
   positionButtons();
 }
 
-function styleButton(btn) {
+function styleButton(btn, isTransparent = false) {
   btn.style("width", "80px");
   btn.style("height", "30px");
   btn.style("padding", "0px");
   btn.style("font-size", "12px");
-  btn.style("border", "none");
   btn.style("border-radius", "6px");
-  btn.style("background", "linear-gradient(145deg, #6a82fb, #fc5c7d)");
   btn.style("color", "#fff");
   btn.style("cursor", "pointer");
-  btn.style("box-shadow", "2px 2px 4px rgba(0,0,0,0.6)");
   btn.style("transition", "all 0.2s ease-in-out");
   btn.style("font-family", "Arial"); // Added: Set font for buttons
+
+  if (isTransparent) {
+    btn.style("background", "rgba(0,0,0,0)");
+    btn.style("border", "1px solid #fff");
+    btn.style("box-shadow", "2px 2px 4px rgba(0,0,0,0.6)");
+  } else {
+    btn.style("border", "none");
+    btn.style("background", "linear-gradient(145deg, #6a82fb, #fc5c7d)");
+    btn.style("box-shadow", "2px 2px 4px rgba(0,0,0,0.6)");
+  }
 }
 
 function positionButtons() {
   playButton.position(20, 20);
   resetButton.position(20, 60);
+  instructionsButton.position(20, 100);
 }
 
 function resetSimulation() {
@@ -322,9 +372,9 @@ function draw() {
     pop();
     
     push();
-    fill(255);
-    textSize(14); // Tăng cỡ chữ của nhãn electron
-    translate(ex, ey-10, 0);
+    fill(255, 255, 0); // Đổi màu sang vàng
+    textSize(18); // Tăng cỡ chữ
+    translate(ex, ey-15, 0); // Đẩy nhãn lên cao hơn
     text("-", 0, 0);
     pop();
     pop();
@@ -333,7 +383,7 @@ function draw() {
   for (let atom of atoms) {
     push();
     translate(atom.pos.x, atom.pos.y - 30, 0);
-    fill(255);
+    fill(255, 255, 0); // Đổi màu sang vàng
     textSize(18);
     if (atom.label === "Na") text("+11", 0, 0);
     else if (atom.label === "Cl") text("+17", 0, 0);
@@ -341,18 +391,20 @@ function draw() {
   }
   
   if (state === "done" || state === "rearranging") {
-    let lastRadiusNa = atoms[0].shellRadii[atoms[0].shellRadii.length - 1] || 60;
+    // Khoảng cách từ lớp 2 của Na (radius = 90) + 30px
+    let lastRadiusNa = atoms[0].shellRadii[1]; 
     push();
-    translate(atoms[0].pos.x, atoms[0].pos.y - (lastRadiusNa + 25), 0);
-    fill(255);
+    translate(atoms[0].pos.x, atoms[0].pos.y - (lastRadiusNa + 30), 0); // Điều chỉnh khoảng cách
+    fill(255, 255, 0); // Đổi màu sang vàng
     textSize(25);
     text("+", 0, 0);
     pop();
     
-    let lastRadiusCl = atoms[1].shellRadii[atoms[1].shellRadii.length - 1] || 60;
+    // Khoảng cách từ lớp 3 của Cl (radius = 130) + 30px
+    let lastRadiusCl = atoms[1].shellRadii[2]; 
     push();
-    translate(atoms[1].pos.x, atoms[1].pos.y - (lastRadiusCl + 25), 0);
-    fill(255);
+    translate(atoms[1].pos.x, atoms[1].pos.y - (lastRadiusCl + 30), 0); // Điều chỉnh khoảng cách
+    fill(255, 255, 0); // Đổi màu sang vàng
     textSize(25);
     text("-", 0, 0);
     pop();
@@ -456,9 +508,9 @@ class Atom {
           pop();
           
           push();
-          fill(255);
-          textSize(14); // Tăng cỡ chữ của nhãn electron
-          translate(ex, ey-10, 0);
+          fill(255, 255, 0); // Đổi màu sang vàng
+          textSize(18); // Tăng cỡ chữ
+          translate(ex, ey-15, 0); // Đẩy nhãn lên cao hơn
           text("-", 0, 0);
           pop();
         }
