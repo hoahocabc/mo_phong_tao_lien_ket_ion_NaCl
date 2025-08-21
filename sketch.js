@@ -1,11 +1,15 @@
 // Ionic Bond Simulation Na-Cl 3D
 // Author: Gemini (modified from GPT-5)
-// Updated by hoahochoahoc915 & Copilot: 
+// Updated by hoahochoahoc915 & Copilot:
 // - Spheres (shell overlays) are opaque (non-transparent).
 // - "+" and "-" charge labels moved up by 10px and font size reduced.
 // - "Na" and "Cl" labels moved down by 10px.
 // - Reset button fully restores initial system state (positions, UI toggles, translate/camera drag state, animation progress).
 // - All buttons now have consistent hover, pressed, and released effects.
+// - Buttons rearranged to place "Reset" above "Instructions" at the bottom of the list.
+// - The speed of electron rotation has been reduced for a slower, more graceful animation.
+// - The rearrangement effect of the electrons has been slowed down and uses a smoother easing function.
+// - The rearrangement effect now smoothly moves the existing electrons to their new positions instead of "flickering" to a new state.
 
 let fontRegular;
 let playButton, resetButton, instructionsButton, toggleSphereButton, toggleLabelButton;
@@ -88,12 +92,16 @@ function easeOutElastic(t) {
     return t === 0 ? 0 : t === 1 ? 1 : pow(2, -10 * t) * sin((t * 10 - 0.75) * c4) + 1;
 }
 
+function easeInOutCubic(t) {
+    return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
+}
+
 function createUI() {
     const commonButtonColor = "linear-gradient(145deg, #6a82fb, #fc5c7d)";
     const commonHoverColor = "linear-gradient(145deg, #667eea, #764ba2)";
 
     playButton = createButton("▶ Play");
-    styleCommonButton(playButton, commonButtonColor, commonHoverColor);
+    styleCommonButton(playButton, commonButtonColor);
     applyButtonEffects(playButton, commonButtonColor, commonHoverColor);
     playButton.mousePressed(() => {
         if (state === "idle") {
@@ -101,15 +109,8 @@ function createUI() {
         }
     });
 
-    resetButton = createButton("↺ Reset");
-    styleCommonButton(resetButton, commonButtonColor, commonHoverColor);
-    applyButtonEffects(resetButton, commonButtonColor, commonHoverColor);
-    resetButton.mousePressed(() => {
-        resetSimulation();
-    });
-
     toggleSphereButton = createButton("Bật lớp cầu");
-    styleCommonButton(toggleSphereButton, commonButtonColor, commonHoverColor);
+    styleCommonButton(toggleSphereButton, commonButtonColor);
     applyButtonEffects(toggleSphereButton, commonButtonColor, commonHoverColor);
     toggleSphereButton.mousePressed(() => {
         showSphere = !showSphere;
@@ -124,7 +125,7 @@ function createUI() {
     });
 
     toggleLabelButton = createButton("Tắt nhãn");
-    styleCommonButton(toggleLabelButton, commonButtonColor, commonHoverColor);
+    styleCommonButton(toggleLabelButton, commonButtonColor);
     applyButtonEffects(toggleLabelButton, commonButtonColor, commonHoverColor);
     toggleLabelButton.mousePressed(() => {
         showLabels = !showLabels;
@@ -135,6 +136,13 @@ function createUI() {
             toggleLabelButton.html("Bật nhãn");
             toggleLabelButton.style("background", "linear-gradient(145deg, #4CAF50, #8BC34A)");
         }
+    });
+
+    resetButton = createButton("↺ Reset");
+    styleCommonButton(resetButton, commonButtonColor);
+    applyButtonEffects(resetButton, commonButtonColor, commonHoverColor);
+    resetButton.mousePressed(() => {
+        resetSimulation();
     });
 
     instructionsButton = createButton("Hướng dẫn");
@@ -237,9 +245,9 @@ function styleInstructionsButton(btn) {
 
 function positionButtons() {
     playButton.position(20, 20);
-    resetButton.position(20, 60);
-    toggleSphereButton.position(20, 100);
-    toggleLabelButton.position(20, 140);
+    toggleSphereButton.position(20, 60);
+    toggleLabelButton.position(20, 100);
+    resetButton.position(20, 140);
     instructionsButton.position(20, 180);
 }
 
@@ -344,30 +352,42 @@ function draw() {
                 transferringElectron.angle = transferredAngle;
                 transferringElectron.initialAngle = transferredAngle;
                 transferringElectron.targetAngle = transferredAngle;
-                atoms[1].shells[2] = [];
-                atoms[1].shells[2].push(transferringElectron);
-                for (let i = 1; i < 8; i++) {
-                    atoms[1].shells[2].push({
-                        angle: transferredAngle,
+                
+                // Thay thế hiệu ứng "tắt và bật" bằng cách tạo một mảng mới
+                // và gán các thuộc tính cần thiết để các electron hiện có
+                // và electron mới di chuyển mượt mà đến vị trí cuối cùng.
+                let newShell = [];
+                // Thêm các electron cũ của Cl
+                for(let i = 0; i < atoms[1].shells[2].length; i++) {
+                     newShell.push({
+                        angle: atoms[1].shells[2][i].angle,
                         col: color(0, 255, 0),
-                        initialAngle: transferredAngle,
-                        targetAngle: transferredAngle,
+                        initialAngle: atoms[1].shells[2][i].angle,
+                        targetAngle: 0, // Sẽ được tính lại trong prepareRearrangement
                     });
                 }
+                // Thêm electron mới từ Na
+                newShell.push({
+                    angle: transferredAngle,
+                    col: transferringElectron.col,
+                    initialAngle: transferredAngle,
+                    targetAngle: 0, // Sẽ được tính lại trong prepareRearrangement
+                });
+
+                atoms[1].shells[2] = newShell;
+
                 prepareRearrangement();
                 state = "rearranging";
                 rearrangeProgress = 0;
             }
         } else if (state === "rearranging") {
-            rearrangeProgress += 0.040;
+            // Tốc độ sắp xếp lại đã được giảm để chuyển động mượt mà hơn
+            rearrangeProgress += 0.015;
             if (rearrangeProgress > 1) rearrangeProgress = 1;
             let shell = atoms[1].shells[2];
             for (let e of shell) {
-                if (red(e.col) === 0 && green(e.col) === 255 && blue(e.col) === 0) {
-                    e.angle = lerp(e.initialAngle, e.targetAngle, rearrangeProgress);
-                } else {
-                    e.angle = lerp(e.initialAngle, e.targetAngle, easeOutElastic(rearrangeProgress));
-                }
+                let t = easeInOutCubic(rearrangeProgress);
+                e.angle = lerp(e.initialAngle, e.targetAngle, t);
             }
             if (rearrangeProgress >= 1) {
                 for (let e of shell) {
@@ -448,15 +468,16 @@ function drawSpheres() {
 function prepareRearrangement() {
     let shell = atoms[1].shells[2];
     let total = shell.length;
-    let blueAngle = shell[0].angle;
-    shell[0].initialAngle = blueAngle;
-    shell[0].targetAngle = blueAngle;
     let spacing = TWO_PI / total;
-    for (let i = 1; i < total; i++) {
-        shell[i].initialAngle = blueAngle;
-        shell[i].targetAngle = blueAngle + i * spacing;
+    // Gán góc mục tiêu cho từng electron
+    for (let i = 0; i < total; i++) {
+        shell[i].targetAngle = (TWO_PI / total) * i;
+        if(shell[i].col.toString() === atoms[0].electronColor.toString()) {
+            shell[i].initialAngle = shell[i].angle;
+        } else {
+            shell[i].initialAngle = shell[i].angle;
+        }
     }
-    atoms[1].shells[2] = shell;
 }
 
 function drawSmoothCircle(radius) {
@@ -515,7 +536,8 @@ class Atom {
                         let angle;
                         if (this.label === "Na" && i === 2) {
                             if (state !== "transferring" && state !== "rearranging" && state !== "done") {
-                                let dynamicSpeed = lerp(0.06, 0.020, moveProgress);
+                                // Tốc độ đã được giảm
+                                let dynamicSpeed = lerp(0.02, 0.005, moveProgress);
                                 e.angle += dynamicSpeed;
                                 angle = e.angle;
                             } else {
@@ -523,17 +545,18 @@ class Atom {
                             }
                         } else if (this.label === "Cl" && i === 2) {
                             if (state === "rearranging") {
-                                if (red(e.col) === 0 && green(e.col) === 255 && blue(e.col) === 0) {
-                                    e.angle = lerp(e.initialAngle, e.targetAngle, rearrangeProgress);
-                                } else {
-                                    e.angle = lerp(e.initialAngle, e.targetAngle, easeOutElastic(rearrangeProgress));
-                                }
+                                // Electron được chuyển từ Na
+                                let t = easeOutElastic(rearrangeProgress);
+                                e.angle = lerp(e.initialAngle, e.targetAngle, t);
+                                angle = e.angle;
                             } else {
-                                e.angle += 0.040;
+                                // Tốc độ đã được giảm
+                                e.angle += 0.015;
                                 angle = e.angle;
                             }
                         } else {
-                            e.angle += this.label === "Na" ? 0.040 : 0.030;
+                            // Tốc độ đã được giảm
+                            e.angle += this.label === "Na" ? 0.015 : 0.010;
                             angle = e.angle;
                         }
                         let ex = cos(angle) * this.shellRadii[i];
