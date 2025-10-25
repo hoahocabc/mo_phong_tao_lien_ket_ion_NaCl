@@ -12,6 +12,14 @@ let showParticles = true; // toggle to show electron particles / shells
 let showLabels = true; // toggle to show Na/Cl labels
 let isElectronRotationOn = true; // Toggle for electron rotation
 
+// nucleus radius used in Atom.show() (sphere size)
+const NUCLEUS_RADIUS = 24;
+
+// label offset and rotation parameters (adjustable)
+const LABEL_OFFSET_EXTRA = 1.0; // distance from nucleus surface toward viewer (NUCLEUS_RADIUS + this)
+const LABEL_ROTATION_MAG = 0.09; // reduced tilt so labels are less inclined toward each other
+const ORBIT_RADIUS = 5; // fixed lateral offset for labels
+
 // Parameters for movement distances (in pixels)
 let initialDistance = 400;
 // finalDistance computed so that the third shells of Na and Cl are nearly touching.
@@ -318,11 +326,27 @@ function draw() {
 
     translate(translateX, translateY, 0);
 
-    ambientLight(80);
-    pointLight(255, 255, 255, 0, 0, 800);
-
+    // If sphere overlay is on, drawSpheres() will set moving directional lights + ambient.
+    // If sphere overlay is off, use ambient + the same two moving directional lights (no fixed lights).
     if (showSphere) {
         drawSpheres();
+    } else {
+        // Increase ambient so objects remain visible without fixed lights (slightly brighter than before)
+        ambientLight(200);
+
+        // Two moving directional lights (dynamic highlights) — increased brightness a bit
+        let a1 = frameCount * 0.010;
+        let l1x = cos(a1) * 400;
+        let l1y = sin(a1) * 240;
+        directionalLight(190, 190, 190, l1x, l1y, -0.3);
+
+        // Light 2 (faster, tighter orbit, different phase) — increased a bit
+        let a2 = frameCount * 0.018 + PI / 3;
+        let l2x = cos(a2) * 220;
+        let l2y = sin(a2) * 160;
+        directionalLight(150, 150, 150, -l2x, -l2y, 0.2);
+
+        // NOTE: Removed fixed directional lights; only two moving directional lights + ambient
     }
 
     // Draw the flickering cylinder only when the state is "done" or "rearranging"
@@ -420,14 +444,31 @@ function draw() {
         pop();
     }
 
-    if (showParticles) {
-        for (let atom of atoms) {
+    // Draw nucleus labels inside the canvas (3D text), placed at nucleus center
+    // and offset toward the viewer by NUCLEUS_RADIUS + LABEL_OFFSET_EXTRA.
+    if (showParticles && showLabels) {
+        // fixed lateral offset (no oscillation) to bring labels closer together
+        let offset = ORBIT_RADIUS;
+
+        // +11 for Na (atoms[0]) rotated to the right (positive rotateY) and translated right by offset
+        if (atoms[0]) {
             push();
-            translate(atom.pos.x, atom.pos.y - 30, 0);
+            translate(atoms[0].pos.x + offset, atoms[0].pos.y, NUCLEUS_RADIUS + LABEL_OFFSET_EXTRA);
+            rotateY(LABEL_ROTATION_MAG);
             fill(255);
             textSize(18);
-            if (atom.label === "Na") text("+11", 0, 0);
-            else if (atom.label === "Cl") text("+17", 0, 0);
+            text("+11", 0, 0);
+            pop();
+        }
+
+        // +17 for Cl (atoms[1]) rotated to the left (negative rotateY) and translated left by offset
+        if (atoms[1]) {
+            push();
+            translate(atoms[1].pos.x - offset, atoms[1].pos.y, NUCLEUS_RADIUS + LABEL_OFFSET_EXTRA);
+            rotateY(-LABEL_ROTATION_MAG);
+            fill(255);
+            textSize(18);
+            text("+17", 0, 0);
             pop();
         }
     }
@@ -465,15 +506,46 @@ function draw() {
     }
 }
 
+// drawSpheres now renders the sphere overlays and materials.
+// Two moving directional lights create dynamic highlights; no fixed lights remain.
+// Intensities slightly raised for a bit more brightness as requested.
 function drawSpheres() {
+    // slightly stronger ambient (a bit brighter than previous)
+    ambientLight(120);
+
+    // TWO MOVING LIGHTS:
+    // Light A: slower, wider orbit (soft fill) — raised intensity
+    let aA = frameCount * 0.010;
+    let LAx = cos(aA) * 380;
+    let LAy = sin(aA) * 240;
+    directionalLight(180, 180, 180, LAx, LAy, -0.25);
+
+    // Light B: faster, tighter orbit and different phase (secondary fill) — raised a bit
+    let aB = frameCount * 0.018 + PI / 4;
+    let LBx = cos(aB) * 210;
+    let LBy = sin(aB) * 170;
+    directionalLight(130, 130, 130, -LBx, -LBy, 0.2);
+
     for (let atom of atoms) {
         if (atom.shellRadii.length > 0) {
             push();
             translate(atom.pos.x, atom.pos.y, 0);
             noStroke();
-            fill(atom.electronColor);
+            // Slightly higher shininess so highlights from moving lights are visible
+            shininess(85);
+
+            // preserve the existing color of the sphere (atom.electronColor)
+            const r = red(atom.electronColor);
+            const g = green(atom.electronColor);
+            const b = blue(atom.electronColor);
+
+            ambientMaterial(r, g, b);
+            // Make specular slightly brighter than base color for clearer highlights
+            specularMaterial(min(255, r + 45), min(255, g + 45), min(255, b + 45));
+
             let outermostRadius = atom.shellRadii[atom.shellRadii.length - 1];
-            sphere(outermostRadius);
+            // higher detail for smoother shading
+            sphere(outermostRadius, 64, 64);
             pop();
         }
     }
@@ -511,7 +583,6 @@ function drawConnectingCylinder() {
     cylinder(40, len); // Cylinder with radius 40 and length 'len'
     pop();
 }
-
 
 function prepareRearrangement() {
     let shell = atoms[1].shells[2];
@@ -569,7 +640,7 @@ class Atom {
     show(showParticles) {
         push();
         fill(255, 0, 0);
-        sphere(20);
+        sphere(NUCLEUS_RADIUS);
         pop();
 
         if (showParticles) {
